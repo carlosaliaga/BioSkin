@@ -84,10 +84,14 @@ def parse_arguments():
     parser.add_argument('--num_samples',  nargs='?', type=int, default=10000000)
     parser.add_argument('--sampling_scheme',  nargs='?', type=str, choices=['Random', 'QuasiRandom'], default='Random')
     parser.add_argument('--sampling_mode',  nargs='?', type=str,
-                        choices=['UniformColor', 'SkinProps', 'LabSlices'], default='UniformColor',
+                        choices=['UniformColor', 'SkinProps', 'LabSlices', 'FromFile'], default='UniformColor',
                         help='UniformColor: Interactive skin property estimation and editing\n'
                              'SkinProps: Estimates Skin properties from Diffuse Albedo Textures\n'
-                             'LabSlices: Skin Tones Sampler\n')
+                             'LabSlices: Skin Tones Sampler\n'
+                             'FromFile: Decode skin property combinations given in --input_props_csv\n')
+
+    parser.add_argument('--input_props_csv',  nargs='?', type=str, default='spectral_skin_props.csv',
+                        help='CSV of skin property combinations to decode, used with --sampling_mode FromFile')
     parser.add_argument('--ranges',  nargs='?',
                         type=str, choices=['RegularSkin', 'AllSkin', 'FullRange'], default='RegularSkin',
                         help='RegularSkin: Ranges for plausible skin tones, leaving aside imperfections\n'
@@ -187,12 +191,18 @@ def main():
             skin_props, ref_vis, ref_vis_rgb, ref_ir, ref_ir_avg = \
                 ms.manifold_sample_Lab_slices(args.json_model, bio_skin, args.output_folder, args.sampling_scheme,
                                               args.ranges, args.num_samples, args.color_space, device)
+        elif args.sampling_mode == "FromFile":
+            skin_props, ref_vis, ref_vis_rgb, ref_ir, ref_ir_avg = \
+                ms.skin_props_from_file(args.json_model, bio_skin, args.output_folder, args.input_props_csv, device)
         else:
-            print("Choose sampling mode: 'UniformColor|SkinProps'")
+            print("Choose sampling mode: 'UniformColor|SkinProps|LabSlices|FromFile'")
             exit(0)
 
         ms.add_specular_reflection_spectral(args.json_model, ref_vis, ref_vis_rgb, ref_ir, ref_ir_avg, skin_props,
                                             args.output_folder, device, num_hemispheric_samples=90, R0_Schick=0.04)
+
+        ms.smooth_and_export_full_spectrum(args.json_model, ref_vis, ref_vis_rgb, ref_ir, ref_ir_avg,
+                                           args.output_folder, device, num_hemispheric_samples=90, R0_Schick=0.04)
 
     # Augment Dataset with Skin Properties
     elif args.mode == options[3]:

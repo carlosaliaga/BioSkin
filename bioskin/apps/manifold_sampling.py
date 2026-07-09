@@ -22,6 +22,7 @@ import bioskin.lighting.light_transport as lt
 import matplotlib.pyplot as plt
 import bioskin.parameters.params_io as params_io
 import bioskin.utils as utils
+from bioskin.dataset.dataset_smooth import smooth_spectrum_tensor
 
 
 def parse_arguments():
@@ -355,6 +356,32 @@ def manifold_sample_Lab_slices(json_model, bio_skin, output_folder, sampling_sch
     return skin_props, skin_tones_spectrum, skin_tones, skin_tones_ir_spectrum, skin_tones_ir
 
 
+def skin_props_from_file(json_model, bio_skin, output_folder, input_csv, device):
+    """Load skin property combinations from a CSV (rows matching SKIN_PROPS, e.g. a
+    previously saved 'spectral_skin_props.csv') and run them through the decoder only
+    (skin properties --> reflectance spectra), skipping property generation entirely."""
+
+    output_folder = output_folder + 'manifold_visualization/' + \
+                    os.path.basename(os.path.normpath(json_model)) + '/'
+    if not os.path.exists(output_folder):
+        os.makedirs(output_folder)
+
+    skin_props = torch.tensor(np.loadtxt(input_csv, delimiter=','), dtype=torch.float32, device=device)
+    if skin_props.dim() == 1:
+        skin_props = skin_props.unsqueeze(0)
+
+    print('Loaded ' + str(skin_props.shape[0]) + ' skin prop. combinations from ' + input_csv)
+
+    with torch.no_grad():
+        skin_tones_spectrum, skin_tones, skin_tones_ir_spectrum, skin_tones_ir = \
+            bio_skin.skin_props_to_reflectance(skin_props)
+
+    skin_tones = torch.clamp(skin_tones, min=0, max=1)
+    skin_tones = skin_tones[:, [2, 1, 0]]
+
+    return skin_props, skin_tones_spectrum, skin_tones, skin_tones_ir_spectrum, skin_tones_ir
+
+
 def skin_properties_sample(json_model, bio_skin, output_folder, ranges, num_samples, color_space,
                            export_animation=False):
 
@@ -440,6 +467,64 @@ def add_specular_reflection_spectral(json_model, skin_tones_spectrum, skin_tones
     utils.plotting.plot_spectrums_IR(skin_tones_spectrum, linear_to_sRGB(skin_tones),
                                   skin_tones_spectrum_IR, linear_to_sRGB(skin_tones_IR),
                                   output_folder + 'spectral_reflectance_diffuse_visible_and_IR')
+
+
+def smooth_and_export_full_spectrum(json_model, skin_tones_spectrum, skin_tones, skin_tones_spectrum_IR, skin_tones_IR,
+                                    output_folder, device, num_hemispheric_samples=90, R0_Schick=0.04,
+                                    num_example_plots=5):
+    """Savitzky-Golay smoothing (same window=15, polyorder=3, 2 passes as bioskin.dataset.dataset_smooth)
+    of decoder output, plus a full-spectrum (visible + near-IR) CSV export, raw and smoothed. Also regenerates
+    the diffuse / diffuse+specular / visible+IR plots (mirroring add_specular_reflection_spectral) from the
+    smoothed spectra, so the smoothed data can be visually inspected the same way as the raw output."""
+
+    output_folder = output_folder + 'manifold_visualization/' + \
+                    os.path.basename(os.path.normpath(json_model)) + '/'
+    if not os.path.exists(output_folder):
+        os.makedirs(output_folder)
+
+    visible_smoothed = smooth_spectrum_tensor(skin_tones_spectrum.clone().cpu())
+    ir_smoothed = smooth_spectrum_tensor(skin_tones_spectrum_IR.clone().cpu())
+
+    full_spectrum_raw = torch.cat((skin_tones_spectrum.cpu(), skin_tones_spectrum_IR.cpu()), dim=1)
+    full_spectrum_smoothed = torch.cat((visible_smoothed, ir_smoothed), dim=1)
+
+    b2pt.save_tensor_to_text(visible_smoothed, output_folder + 'spectral_reflectance_diffuse_smoothed.csv')
+    b2pt.save_tensor_to_text(full_spectrum_raw, output_folder + 'spectral_reflectance_full_visible_and_IR.csv')
+    b2pt.save_tensor_to_text(full_spectrum_smoothed,
+                             output_folder + 'spectral_reflectance_full_visible_and_IR_smoothed.csv')
+
+    num_example_plots = min(num_example_plots, skin_tones_spectrum.shape[0])
+    fig, axes = plt.subplots(num_example_plots, 1, figsize=(6, 3 * num_example_plots))
+    if num_example_plots == 1:
+        axes = [axes]
+    for i in range(num_example_plots):
+        axes[i].plot(skin_tones_spectrum[i].cpu().numpy(), label='raw', alpha=0.6)
+        axes[i].plot(visible_smoothed[i].numpy(), label='smoothed', color='red')
+        axes[i].set_title('Sample ' + str(i))
+        axes[i].legend()
+    plt.tight_layout()
+    plt.savefig(output_folder + 'spectral_reflectance_diffuse_smoothing_comparison.png', dpi=150)
+    plt.close()
+
+    # regenerate the same three population plots as add_specular_reflection_spectral, from smoothed spectra
+    visible_smoothed_dev = visible_smoothed.to(device)
+    ir_smoothed_dev = ir_smoothed.to(device)
+
+    utils.plotting.plot_spectrums(visible_smoothed_dev, linear_to_sRGB(skin_tones),
+                                  output_folder + 'spectral_reflectance_diffuse_smoothed')
+
+    spectrums_with_specular_smoothed, skin_tones_with_specular_smoothed = \
+        lt.add_specular_reflectance(visible_smoothed_dev, R0_Schick, num_hemispheric_samples, device)
+    b2pt.save_tensor_to_text(spectrums_with_specular_smoothed,
+                             output_folder + 'spectral_reflectance_diffuse_and_specular_smoothed.csv')
+    utils.plotting.plot_spectrums(spectrums_with_specular_smoothed, linear_to_sRGB(skin_tones_with_specular_smoothed),
+                                  output_folder + 'spectral_reflectance_diffuse_and_specular_smoothed', bgr=True)
+
+    utils.plotting.plot_spectrums_IR(visible_smoothed_dev, linear_to_sRGB(skin_tones),
+                                  ir_smoothed_dev, linear_to_sRGB(skin_tones_IR),
+                                  output_folder + 'spectral_reflectance_diffuse_visible_and_IR_smoothed')
+
+    print('Saved smoothed + full-spectrum (visible+IR) CSVs and plots to ' + output_folder)
 
 
 if __name__ == '__main__':

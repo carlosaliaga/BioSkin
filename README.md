@@ -30,6 +30,8 @@ DOI = {10.1111/cgf.14887}
 `.\venv\Scripts\Activate.ps1` \
 `python -m pip install --upgrade pip` \
 `python -m pip install -r requirements.txt`
+Install pytorch:
+`pip3 install torch torchvision --index-url https://download.pytorch.org/whl/cu132`
 
 ### Packaging
 
