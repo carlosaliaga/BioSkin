@@ -356,7 +356,7 @@ def manifold_sample_Lab_slices(json_model, bio_skin, output_folder, sampling_sch
     return skin_props, skin_tones_spectrum, skin_tones, skin_tones_ir_spectrum, skin_tones_ir
 
 
-def skin_props_from_file(json_model, bio_skin, output_folder, input_csv, device):
+def skin_props_from_file(json_model, bio_skin, output_folder, input_csv, device, color_space='LAB'):
     """Load skin property combinations from a CSV (rows matching SKIN_PROPS, e.g. a
     previously saved 'spectral_skin_props.csv') and run them through the decoder only
     (skin properties --> reflectance spectra), skipping property generation entirely."""
@@ -365,6 +365,8 @@ def skin_props_from_file(json_model, bio_skin, output_folder, input_csv, device)
                     os.path.basename(os.path.normpath(json_model)) + '/'
     if not os.path.exists(output_folder):
         os.makedirs(output_folder)
+
+    model_name, _ = os.path.splitext(os.path.basename(json_model))
 
     skin_props = torch.tensor(np.loadtxt(input_csv, delimiter=','), dtype=torch.float32, device=device)
     if skin_props.dim() == 1:
@@ -378,6 +380,26 @@ def skin_props_from_file(json_model, bio_skin, output_folder, input_csv, device)
 
     skin_tones = torch.clamp(skin_tones, min=0, max=1)
     skin_tones = skin_tones[:, [2, 1, 0]]
+
+    # manifold visualization: RGB gamut of the decoded tones, and one 3D scatter per skin property
+    utils.plotting.plot_3d_points('reflectance',
+                                  linear_to_sRGB(skin_tones),
+                                  linear_to_sRGB(skin_tones),
+                                  0,
+                                  title='Sampled Data',
+                                  path=output_folder,
+                                  name=model_name + "_from_file_subset_RGB",
+                                  space=color_space)
+
+    for skin_prop_index in range(0, bio_skin.model_params.D_skin):
+        utils.plotting.plot_3d_points('skin_props',
+                                      linear_to_sRGB(skin_tones),
+                                      skin_props,
+                                      skin_prop_index,
+                                      title='Skin Prop. ' + SKIN_PROPS[skin_prop_index],
+                                      path=output_folder,
+                                      name=model_name + "_" + str(skin_props.shape[0]),
+                                      space=color_space)
 
     return skin_props, skin_tones_spectrum, skin_tones, skin_tones_ir_spectrum, skin_tones_ir
 

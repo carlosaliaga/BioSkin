@@ -193,7 +193,8 @@ def main():
                                               args.ranges, args.num_samples, args.color_space, device)
         elif args.sampling_mode == "FromFile":
             skin_props, ref_vis, ref_vis_rgb, ref_ir, ref_ir_avg = \
-                ms.skin_props_from_file(args.json_model, bio_skin, args.output_folder, args.input_props_csv, device)
+                ms.skin_props_from_file(args.json_model, bio_skin, args.output_folder, args.input_props_csv, device,
+                                        args.color_space)
         else:
             print("Choose sampling mode: 'UniformColor|SkinProps|LabSlices|FromFile'")
             exit(0)
