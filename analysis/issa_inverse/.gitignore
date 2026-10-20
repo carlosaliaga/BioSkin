@@ -1,0 +1,7 @@
+# downloaded third-party files (lasisilab/SkinSim_Quarto has no licence): fetch with fetch_upstream.py
+upstream/
+# generated outputs: rerun the scripts
+out/
+full_out/
+# unpublished manuscript material and correspondence: local until publication
+paper/
