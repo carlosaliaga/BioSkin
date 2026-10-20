@@ -21,6 +21,7 @@ from bioskin.parameters.parameter import REGULAR_SKIN_MIN_VALUES
 from bioskin.parameters.parameter import REGULAR_SKIN_MAX_VALUES
 from bioskin.parameters.parameter import SKIN_MIN_VALUES
 from bioskin.parameters.parameter import SKIN_MAX_VALUES
+from bioskin.parameters.parameter import check_decoder_inputs
 from bioskin.parameters.parameter import MIN_PROP_VALUES
 from bioskin.parameters.parameter import MAX_PROP_VALUES
 
@@ -361,7 +362,9 @@ class BioSkinInference:
             skin_params[i1:i2, :] = skin_params_batch
         return skin_params
 
-    def skin_props_to_reflectance(self, skin_params):
+    def skin_props_to_reflectance(self, skin_params, check_inputs=True):
+        if check_inputs:
+            check_decoder_inputs(skin_params, name='skin_props_to_reflectance')
         length = len(skin_params)
         batch_num = int(np.ceil(length / self.batch_size))
         reflectances = torch.zeros((skin_params.shape[0], self.reflectance_size), device=self.device,

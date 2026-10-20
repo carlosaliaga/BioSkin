@@ -11,11 +11,20 @@ import numpy as np
 import bioskin.editing.operators as op
 
 
-SKIN_PROPS = ["Melanin", "Haemoglobin", "Thickness", "Blood Oxygenation", "Melanin Type Ratio", "Occlusion"]
+#  NOTE on the order of slots 3 and 4.
+#  These used to be listed as ("Blood Oxygenation", "Melanin Type Ratio"), which is
+#  the reverse of how the pretrained decoders were actually trained. The Monte Carlo
+#  training set (datasets/*_params_test_*.pt, named ..._eu[0.650-0.800]_ox[0.900-1.000])
+#  stores the eumelanin/pheomelanin ratio in column 3 and blood oxygenation in column 4,
+#  and the decoder consumes those columns in stored order. Feeding the .pt columns
+#  straight through reproduces the simulation at median per-curve RMSE 0.008 and wins on
+#  96.2% of the 3624 curated samples; transposing 3/4 degrades that to 0.025.
+#  Do not reorder these without re-checking against the training tensors.
+SKIN_PROPS = ["Melanin", "Haemoglobin", "Thickness", "Melanin Type Ratio", "Blood Oxygenation", "Occlusion"]
 
 # Plausible range, not including rushes, spots, etc.
-REGULAR_SKIN_MIN_VALUES = [0.005, 0.001, 0.005, 0.6, 0.72, 0.001]
-REGULAR_SKIN_MAX_VALUES = [0.40, 0.0225, 0.025, 0.8, 0.76, 1.0]
+REGULAR_SKIN_MIN_VALUES = [0.005, 0.001, 0.005, 0.65, 0.90, 0.001]
+REGULAR_SKIN_MAX_VALUES = [0.40, 0.0225, 0.025, 0.80, 1.00, 1.0]
 
 # Plausible range
 SKIN_MIN_VALUES = [0.001, 0.001, 0.001, 0.001, 0.001, 0.001]
@@ -24,6 +33,66 @@ SKIN_MAX_VALUES = [0.45, 0.25, 0.035, 1.0, 1.0, 1.0]
 # Full range
 MIN_PROP_VALUES = [0.001, 0.001, 0.001, 0.001, 0.001, 0.001]
 MAX_PROP_VALUES = [1.0, 1.0, 0.035, 1.0, 1.0, 1.0]
+
+#  Support of the Monte Carlo training set in *normalized* decoder-input space, per slot.
+#  Slots 0-2 are warped (see params_io.warp_parameter_maps); slots 3-5 pass through
+#  unchanged, so for those the normalized value is also the physical value.
+#  Used by check_decoder_inputs() below; these are measured from the training tensors,
+#  not hand-picked, so treat them as ground truth about what the decoders have seen.
+DECODER_TRAINING_MIN = [0.10, 0.17, 0.00, 0.65, 0.90, 0.00]
+DECODER_TRAINING_MAX = [0.76, 0.67, 1.00, 0.80, 1.00, 1.00]
+
+
+def check_decoder_inputs(params, strict=True, name='decoder input'):
+    """Sanity-check normalized skin parameters before decoding.
+
+    The decoder happily extrapolates on out-of-distribution input and still returns
+    something that looks like a plausible skin curve, so mistakes here fail silently.
+    The most damaging one is transposing slots 3 and 4 (melanin type ratio vs blood
+    oxygenation), whose training supports are disjoint - that is detected and raised.
+
+    Set strict=False to downgrade the transposition check to a warning.
+    """
+    import warnings
+
+    if hasattr(params, 'detach'):
+        values = params.detach().cpu().numpy()
+    else:
+        values = np.asarray(params)
+    if values.ndim == 1:
+        values = values[None, :]
+
+    ratio_lo, ratio_hi = DECODER_TRAINING_MIN[3], DECODER_TRAINING_MAX[3]   # 0.65 - 0.80
+    oxy_lo, oxy_hi = DECODER_TRAINING_MIN[4], DECODER_TRAINING_MAX[4]       # 0.90 - 1.00
+
+    if values.shape[1] > 4:
+        slot3, slot4 = values[:, 3], values[:, 4]
+        looks_swapped = (np.mean((slot3 >= oxy_lo) & (slot3 <= oxy_hi)) > 0.9 and
+                         np.mean((slot4 >= ratio_lo) & (slot4 <= ratio_hi)) > 0.9)
+        if looks_swapped:
+            message = (
+                f"{name}: slots 3 and 4 look transposed. Slot 3 must be "
+                f"'{SKIN_PROPS[3]}' in [{ratio_lo}, {ratio_hi}] and slot 4 must be "
+                f"'{SKIN_PROPS[4]}' in [{oxy_lo}, {oxy_hi}], but the values given are "
+                f"the other way round. Decoding as-is silently produces spectra with an "
+                f"inflated erythema index. Swap the two columns, or pass strict=False if "
+                f"this is intentional."
+            )
+            if strict:
+                raise ValueError(message)
+            warnings.warn(message, stacklevel=2)
+
+    for slot in range(min(values.shape[1], len(DECODER_TRAINING_MIN))):
+        lo, hi = DECODER_TRAINING_MIN[slot], DECODER_TRAINING_MAX[slot]
+        outside = np.mean((values[:, slot] < lo) | (values[:, slot] > hi))
+        if outside > 0.5:
+            warnings.warn(
+                f"{name}: {outside:.0%} of slot {slot} ('{SKIN_PROPS[slot]}') values fall "
+                f"outside the training support [{lo}, {hi}]. The decoder is extrapolating "
+                f"and the resulting spectra may not be physically meaningful.",
+                stacklevel=2)
+
+    return values
 
 
 class Parameter:

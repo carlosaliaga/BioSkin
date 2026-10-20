@@ -85,17 +85,19 @@ def build_parameter_combinations(component_resolutions, output_path):
     melanins = np.linspace(REGULAR_SKIN_MIN_VALUES[0], REGULAR_SKIN_MAX_VALUES[0], component_resolutions[0])
     haes = np.linspace(REGULAR_SKIN_MIN_VALUES[1], REGULAR_SKIN_MAX_VALUES[1], component_resolutions[1])
     thicknesses = np.linspace(REGULAR_SKIN_MIN_VALUES[2], REGULAR_SKIN_MAX_VALUES[2], component_resolutions[2])
-    oxys = np.linspace(REGULAR_SKIN_MIN_VALUES[3], REGULAR_SKIN_MAX_VALUES[3], component_resolutions[3])
-    melratios = np.linspace(REGULAR_SKIN_MIN_VALUES[4], REGULAR_SKIN_MAX_VALUES[4], component_resolutions[4])
+    #  slot 3 is the melanin type (eumelanin/pheomelanin) ratio and slot 4 is blood
+    #  oxygenation - see the note on SKIN_PROPS in bioskin/parameters/parameter.py.
+    melratios = np.linspace(REGULAR_SKIN_MIN_VALUES[3], REGULAR_SKIN_MAX_VALUES[3], component_resolutions[3])
+    oxys = np.linspace(REGULAR_SKIN_MIN_VALUES[4], REGULAR_SKIN_MAX_VALUES[4], component_resolutions[4])
 
     parameter_combinations = []
 
-    for mr in melratios:
-        for oxy in oxys:
+    for oxy in oxys:
+        for mr in melratios:
             for th in thicknesses:
                 for hae in haes:
                     for mel in melanins:
-                        parameter_tuple = [mel, hae, th, oxy, mr]
+                        parameter_tuple = [mel, hae, th, mr, oxy]
                         if parameter_tuple not in parameter_combinations:
                             parameter_combinations.append(parameter_tuple)
 
