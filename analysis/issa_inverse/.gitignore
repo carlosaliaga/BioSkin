@@ -5,3 +5,4 @@ out/
 full_out/
 # unpublished manuscript material and correspondence: local until publication
 paper/
+upstream_*/

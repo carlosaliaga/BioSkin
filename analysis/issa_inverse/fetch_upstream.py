@@ -15,6 +15,7 @@ FILES = [
     "code/bioskin_inputs.py",                  # imported by check_bioskin_rerun.py
     "code/bvcm_gibbs.py",
     "output/corrected_validation/reference_state.npz",   # fitted GMM, BVCM betas, covariance, thresholds, PCA
+    "output/corrected_validation/gmm_mi_ei_reference.npz",  # frozen stage-1 mixture (from 2026-10-25)
     "output/corrected_validation/summary.json",          # stage-1 threshold, published counts, ISSA workbook hash
     "figures/bioskin_properties_distribution.pdf",
     "README.md",

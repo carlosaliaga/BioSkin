@@ -42,6 +42,8 @@ Then, from the repo root with the project venv (`-I` because `upstream/` is down
 | full run figure | `full_figs.py` | seconds | `full_out/fig6_full_run.png` |
 | full inversion with SCI term | `specular_run.py` | 2 min | `full_out/specular_runs.csv` |
 | **every number and figure in the paper section** | **`paper_numbers.py`** | 3 min | `paper/paper_numbers.json`, `paper/*.pdf` |
+| encoder vs. fits, per-class blood masking | `encoder_vs_fits.py` | 1 min | `paper/encoder_vs_fits.json` |
+| specular floor vs. nonlinear melanin in the BVCM | `nonlinear_mi_check.py` | seconds | `paper/nonlinear_mi_check.csv` |
 
 `paper_numbers.py` is self-contained, and is the one to rerun if anything in Section 4.3 changes.
 
