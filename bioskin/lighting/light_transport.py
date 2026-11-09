@@ -57,17 +57,19 @@ def fresnel_schlick(cos_theta, R0):
 
 
 def integrate_fresnel(R0, num_samples):
-    # Stratified sampling the zenith angle in the hemisphere of directions
+    # Stratified sampling of cos(theta) over the hemisphere. Uniform cos(theta) is uniform in solid angle
+    # (d_omega = d_cos_theta d_phi), so the sin(theta) of the solid angle is already accounted for and the
+    # only weight is the cos(theta) foreshortening. Result: the hemispherical (diffuse-illumination) average
+    # Fresnel, which for Schlick is R0 + (1 - R0) / 21.
     u1 = torch.linspace(0.0, 1.0 - 1 / num_samples, steps=num_samples)
     u1 += torch.rand(num_samples) / num_samples  # jitter
     cos_theta = 1 - u1
-    sin_theta = torch.sqrt(1 - cos_theta * cos_theta)
     specular_reflectance = fresnel_schlick(cos_theta, torch.tensor([R0]))
-    total_specular_reflectance = torch.sum(specular_reflectance * cos_theta * sin_theta)  # foreshortening & solid angle
+    total_specular_reflectance = torch.sum(specular_reflectance * cos_theta)  # foreshortening
 
     diffuse_reflectance = 1.0 - specular_reflectance
     diffuse_reflectance[diffuse_reflectance < 0.0] = 0.0
-    total_diffuse_reflectance = torch.sum(diffuse_reflectance * cos_theta * sin_theta)
+    total_diffuse_reflectance = torch.sum(diffuse_reflectance * cos_theta)
 
     total_reflectance = total_specular_reflectance + total_diffuse_reflectance
     total_specular_reflectance /= total_reflectance
